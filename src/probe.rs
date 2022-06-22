@@ -314,10 +314,26 @@ impl ProbeInfo {
         let desc = device.device_descriptor().ok()?;
         let handle = device.open().ok()?;
         let language = handle.read_languages(timeout).ok()?.get(0).cloned()?;
+
+        // Check all interfaces for any strings containing CMSIS-DAP.
+        let mut iface_str_matches = false;
+        let cdesc = device.config_descriptor(0).ok()?;
+        'iloop: for interface in cdesc.interfaces() {
+            for idesc in interface.descriptors() {
+                match handle.read_interface_string(language, &idesc, timeout) {
+                    Ok(istr) if istr.contains("CMSIS-DAP") => {
+                        iface_str_matches = true;
+                        break 'iloop;
+                    },
+                    Ok(_)  => continue,
+                    Err(_) => continue,
+                }
+            }
+        }
+
         let prod_str = handle.read_product_string(language, &desc, timeout).ok()?;
         let sn_str = handle.read_serial_number_string(language, &desc, timeout).ok();
-
-        if prod_str.contains("CMSIS-DAP") {
+        if prod_str.contains("CMSIS-DAP") || iface_str_matches {
             Some(Self {
                 name: Some(prod_str),
                 vid: desc.vendor_id(),
@@ -335,7 +351,8 @@ impl ProbeInfo {
     /// Returns None if the device could not be read or was not a CMSIS-DAP device.
     fn from_hid(device: &DeviceInfo) -> Option<ProbeInfo> {
         let prod_str = device.product_string()?;
-        if prod_str.contains("CMSIS-DAP") {
+        let path = device.path().to_str().unwrap_or(&"");
+        if prod_str.contains("CMSIS-DAP") || path.contains("CMSIS-DAP") {
             Some(Self {
                 name: Some(prod_str.to_owned()),
                 vid: device.vendor_id(),
