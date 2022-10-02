@@ -109,7 +109,8 @@ impl JTAG {
         if index < chain.n_taps() {
             Ok(JTAGTAP::new(self, chain, index))
         } else {
-            log::error!("Requested TAP {}, but there are only {} TAPs.", index, chain.n_taps());
+            let n_taps = chain.n_taps();
+            log::error!("Requested TAP {index}, but there are only {n_taps} TAPs.");
             Err(Error::InvalidTAPIndex)
         }
     }
@@ -124,8 +125,9 @@ impl JTAG {
 
     /// Enter Run-Test/Idle state from TestLogicReset, Exit1*, Pause*, or Update*.
     pub fn enter_run_test_idle(&mut self) -> Result<()> {
-        log::trace!("JTAG state: {:?} -> RunTestIdle", self.state);
-        match self.state {
+        let state = self.state;
+        log::trace!("JTAG state: {state:?} -> RunTestIdle");
+        match state {
             TAPState::RunTestIdle                   => (),
             TAPState::TestLogicReset                => self.mode(bv![0])?,
             TAPState::Exit1DR  | TAPState::Exit1IR  => self.mode(bv![1, 0])?,
@@ -146,8 +148,9 @@ impl JTAG {
 
     /// Enter Shift-DR state from Test-Logic-Reset, Run-Test/Idle, Update*, or Pause*.
     pub fn enter_shift_dr(&mut self) -> Result<()> {
-        log::trace!("JTAG state: {:?} -> ShiftDR", self.state);
-        match self.state {
+        let state = self.state;
+        log::trace!("JTAG state: {state:?} -> ShiftDR");
+        match state {
             TAPState::ShiftDR                       => (),
             TAPState::TestLogicReset                => self.mode(bv![0, 1, 0, 0])?,
             TAPState::RunTestIdle                   => self.mode(bv![1, 0, 0])?,
@@ -163,7 +166,8 @@ impl JTAG {
 
     /// Enter Pause-DR from Exit1-DR.
     pub fn enter_pause_dr(&mut self) -> Result<()> {
-        log::trace!("JTAG state: {:?} -> PauseDR", self.state);
+        let state = self.state;
+        log::trace!("JTAG state: {state:?} -> PauseDR");
         match self.state {
             TAPState::PauseDR                       => (),
             TAPState::Exit1DR                       => self.mode(bv![0])?,
@@ -175,8 +179,9 @@ impl JTAG {
 
     /// Enter Update-DR from Shift-DR or Exit1-DR.
     pub fn enter_update_dr(&mut self) -> Result<()> {
-        log::trace!("JTAG state: {:?} -> UpdateDR", self.state);
-        match self.state {
+        let state = self.state;
+        log::trace!("JTAG state: {state:?} -> UpdateDR");
+        match state {
             TAPState::UpdateDR                      => (),
             TAPState::ShiftDR                       => self.mode(bv![1, 1])?,
             TAPState::Exit1DR                       => self.mode(bv![1])?,
@@ -189,8 +194,9 @@ impl JTAG {
 
     /// Enter Shift-IR state from Test-Logic-Reset, Run-Test/Idle, Update*, or Pause*.
     pub fn enter_shift_ir(&mut self) -> Result<()> {
-        log::trace!("JTAG state: {:?} -> ShiftIR", self.state);
-        match self.state {
+        let state = self.state;
+        log::trace!("JTAG state: {state:?} -> ShiftIR");
+        match state {
             TAPState::ShiftIR                       => (),
             TAPState::TestLogicReset                => self.mode(bv![0, 1, 1, 0, 0])?,
             TAPState::RunTestIdle                   => self.mode(bv![1, 1, 0, 0])?,
@@ -207,8 +213,9 @@ impl JTAG {
 
     /// Enter Pause-IR from Exit1-IR.
     pub fn enter_pause_ir(&mut self) -> Result<()> {
-        log::trace!("JTAG state: {:?} -> PauseIR", self.state);
-        match self.state {
+        let state = self.state;
+        log::trace!("JTAG state: {state:?} -> PauseIR");
+        match state {
             TAPState::PauseIR                       => (),
             TAPState::Exit1IR                       => self.mode(bv![0])?,
             _                                       => return Err(Error::BadState),
@@ -219,8 +226,9 @@ impl JTAG {
 
     /// Enter Update-IR from Shift-IR or Exit1-IR.
     pub fn enter_update_ir(&mut self) -> Result<()> {
-        log::trace!("JTAG state: {:?} -> UpdateIR", self.state);
-        match self.state {
+        let state = self.state;
+        log::trace!("JTAG state: {state:?} -> UpdateIR");
+        match state {
             TAPState::UpdateIR                      => (),
             TAPState::ShiftIR                       => self.mode(bv![1, 1])?,
             TAPState::Exit1IR                       => self.mode(bv![1])?,
@@ -333,14 +341,15 @@ impl JTAG {
     ///
     /// Must already be in a Shift* state, and `self.state` is updated upon completion.
     fn read(&mut self, n: usize, exit: bool) -> Result<Vec<bool>> {
-        let new_state = match (self.state, exit) {
+        let old_state = self.state;
+        let new_state = match (old_state, exit) {
             (TAPState::ShiftIR, true) => TAPState::Exit1IR,
             (TAPState::ShiftIR, false) => TAPState::ShiftIR,
             (TAPState::ShiftDR, true) => TAPState::Exit1DR,
             (TAPState::ShiftDR, false) => TAPState::ShiftDR,
             _ => return Err(Error::BadState),
         };
-        log::trace!("JTAG state: {:?} -> {:?}, reading {} bits", self.state, new_state, n);
+        log::trace!("JTAG state: {old_state:?} -> {new_state:?}, reading {n} bits");
 
         let tdo = self.sequences().read(n, exit)?.run()?;
 
@@ -353,14 +362,16 @@ impl JTAG {
     ///
     /// Must already be in a Shift* state, and `self.state` is updated upon completion.
     fn write(&mut self, tdi: &[bool], exit: bool) -> Result<()> {
-        let new_state = match (self.state, exit) {
+        let old_state = self.state;
+        let new_state = match (old_state, exit) {
             (TAPState::ShiftIR, true) => TAPState::Exit1IR,
             (TAPState::ShiftIR, false) => TAPState::ShiftIR,
             (TAPState::ShiftDR, true) => TAPState::Exit1DR,
             (TAPState::ShiftDR, false) => TAPState::ShiftDR,
             _ => return Err(Error::BadState),
         };
-        log::trace!("JTAG state: {:?} -> {:?}, writing {} bits", self.state, new_state, tdi.len());
+        let n = tdi.len();
+        log::trace!("JTAG state: {old_state:?} -> {new_state:?}, writing {n} bits");
         self.sequences().write(tdi, exit)?.run()?;
         self.state = new_state;
         Ok(())
@@ -371,14 +382,16 @@ impl JTAG {
     ///
     /// Must already be in a Shift* state, and `self.state` is updated upon completion.
     fn exchange(&mut self, tdi: &[bool], exit: bool) -> Result<Vec<bool>> {
-        let new_state = match (self.state, exit) {
+        let old_state = self.state;
+        let new_state = match (old_state, exit) {
             (TAPState::ShiftIR, true) => TAPState::Exit1IR,
             (TAPState::ShiftIR, false) => TAPState::ShiftIR,
             (TAPState::ShiftDR, true) => TAPState::Exit1DR,
             (TAPState::ShiftDR, false) => TAPState::ShiftDR,
             _ => return Err(Error::BadState),
         };
-        log::trace!("JTAG state: {:?} -> {:?}, writing {} bits", self.state, new_state, tdi.len());
+        let n = tdi.len();
+        log::trace!("JTAG state: {old_state:?} -> {new_state:?}, writing {n} bits");
         let tdo = self.sequences().exchange(tdi, exit)?.run()?;
         self.state = new_state;
         Ok(tdo)
@@ -400,7 +413,8 @@ impl JTAG {
     /// Replaces the current contents with all 1s (BYPASS) and enters
     /// the Run-Test/Idle state.
     fn scan_ir(&mut self) -> Result<Vec<bool>> {
-        log::debug!("Scanning IR up to {} bits", self.max_length);
+        let max_length = self.max_length;
+        log::debug!("Scanning IR up to {max_length} bits");
         self.enter_shift_ir()?;
         let data = self.scan_inner("IR")?;
         self.enter_run_test_idle()?;
@@ -412,7 +426,8 @@ impl JTAG {
     /// Replaces the current contents with all 1s and enters
     /// the Run-Test/Idle state.
     fn scan_dr(&mut self) -> Result<Vec<bool>> {
-        log::debug!("Scanning DR up to {} bits", self.max_length);
+        let max_length = self.max_length;
+        log::debug!("Scanning DR up to {max_length} bits");
         self.enter_shift_dr()?;
         let data = self.scan_inner("DR")?;
         self.enter_run_test_idle()?;
@@ -442,25 +457,25 @@ impl JTAG {
         // Find first 1 in d1, which indicates length of register.
         let n = match d1.iter().position(|bit| *bit) {
             Some(n) => {
-                log::info!("JTAG {} scan chain detected as {} bits long", name, n);
+                log::info!("JTAG {name} scan chain detected as {n} bits long");
                 n
             },
             None => {
-                log::error!("JTAG {} scan chain either broken or too long: \
-                             did not detect 1", name);
+                log::error!("JTAG {name} scan chain either broken or too long: \
+                             did not detect 1");
                 return Err(Error::ScanChainBroken);
             }
         };
 
         // Check at least one register is detected in the scan chain.
         if n == 0 {
-            log::error!("JTAG {} scan chain is empty", name);
+            log::error!("JTAG {name} scan chain is empty");
             return Err(Error::ScanChainBroken);
         }
 
         // Check d0[n..] are all 0.
         if d0[n..].iter().any(|bit| *bit) {
-            log::warn!("JTAG {} scan chain either broken or too long: did not detect 0", name);
+            log::warn!("JTAG {name} scan chain either broken or too long: did not detect 0");
             return Err(Error::ScanChainBroken);
         }
 
@@ -480,12 +495,12 @@ impl JTAG {
         let remaining = bytes - (full * 9) - 1;
         // Convert to bits.
         let bits = (full * 64) + (remaining * 8);
-        log::trace!("Computed maximum TDI bits as {}", bits);
+        log::trace!("Computed maximum TDI bits as {bits}");
         bits
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct IDCODE(pub u32);
 
 impl IDCODE {
@@ -717,7 +732,7 @@ impl JTAGTAP {
         tdi.extend_from_slice(dr);
         tdi.extend_from_slice(&vec![true; self.dr_suffix]);
 
-        self.jtag.write_dr_cb(&dr, cb)
+        self.jtag.write_dr_cb(dr, cb)
     }
 
     /// Move to Shift-DR, read `n` bits of DR while writing 0xFF.
@@ -753,13 +768,12 @@ impl JTAGTAP {
 /// all IDCODEs and TAPs in BYPASS.
 ///
 /// Returns Vec<Option<u32>>, with None for TAPs in BYPASS.
-fn extract_idcodes(dr: &[bool]) -> Result<Vec<Option<IDCODE>>> {
-    let mut dr = &dr[..];
+fn extract_idcodes(mut dr: &[bool]) -> Result<Vec<Option<IDCODE>>> {
     let mut idcodes = Vec::new();
     while !dr.is_empty() {
         if dr[0] {
             if dr.len() < 32 {
-                log::error!("Truncated IDCODE: {:02X?}", dr);
+                log::error!("Truncated IDCODE: {dr:02X?}");
                 return Err(Error::InvalidIDCODE);
             }
             let (idcode, rem) = drain_u32(dr)?;
@@ -768,7 +782,7 @@ fn extract_idcodes(dr: &[bool]) -> Result<Vec<Option<IDCODE>>> {
                 log::error!("Invalid IDCODE: {:08X}", idcode.0);
                 return Err(Error::InvalidIDCODE);
             }
-            log::debug!("Found IDCODE: {}", idcode);
+            log::debug!("Found IDCODE: {idcode}");
             idcodes.push(Some(idcode));
             dr = rem;
         } else {
@@ -833,7 +847,7 @@ fn extract_ir_lengths(ir: &[bool], n_taps: usize, expected: Option<&[usize]>)
                    .filter(|(_, w)| w[0] && !w[1])
                    .map(|(i, _)| i)
                    .collect::<Vec<usize>>();
-    log::trace!("Possible IR start positions: {:?}", starts);
+    log::trace!("Possible IR start positions: {starts:?}");
 
     if n_taps == 0 {
         log::error!("Cannot scan IR without at least one TAP");
@@ -850,7 +864,7 @@ fn extract_ir_lengths(ir: &[bool], n_taps: usize, expected: Option<&[usize]>)
         // If expected lengths are available, verify and return them.
         if expected.len() != n_taps {
             log::error!("Number of provided IR lengths ({}) does not match \
-                         number of detected TAPs ({})", expected.len(), n_taps);
+                         number of detected TAPs ({n_taps})", expected.len());
             Err(Error::InvalidIR)
         } else if expected.iter().sum::<usize>() != ir.len() {
             log::error!("Sum of provided IR lengths ({}) does not match \
@@ -861,7 +875,7 @@ fn extract_ir_lengths(ir: &[bool], n_taps: usize, expected: Option<&[usize]>)
             let exp_starts = expected.iter()
                                      .scan(0, |a, &x| { let b = *a; *a += x; Some(b) })
                                      .collect::<Vec<usize>>();
-            log::trace!("Provided IR start positions: {:?}", exp_starts);
+            log::trace!("Provided IR start positions: {exp_starts:?}");
             let unsupported = exp_starts.iter().filter(|s| !starts.contains(s)).count();
             if unsupported > 0 {
                 log::error!("Provided IR lengths imply an IR start position \
@@ -880,7 +894,7 @@ fn extract_ir_lengths(ir: &[bool], n_taps: usize, expected: Option<&[usize]>)
         // If the number of possible starts matches the number of TAPs,
         // we can unambiguously find all lengths.
         let irlens = starts_to_lens(&starts, ir.len());
-        log::info!("IR lengths are unambiguous: {:?}", irlens);
+        log::info!("IR lengths are unambiguous: {irlens:?}");
         Ok(irlens)
     } else {
         log::error!("IR lengths are ambiguous and must be specified with --ir-lengths.");
@@ -990,14 +1004,15 @@ impl DAPSequences {
     {
         // Check length is within CMSIS-DAP bounds.
         if len == 0 || len > 64 {
-            log::error!("Sequence length must be between 1 and 64 bits, but is {}", len);
+            log::error!("Sequence length must be between 1 and 64 bits, but is {len}");
             return Err(Error::InvalidSequence);
         }
 
         // Check enough TDI data is specified for the length.
         if let Some(tdi) = tdi {
-            if tdi.len() != len {
-                log::error!("{} bits of TDI data supplied, expected {}", tdi.len(), len);
+            let n = tdi.len();
+            if n != len {
+                log::error!("{n} bits of TDI data supplied, expected {len}");
                 return Err(Error::InvalidSequence);
             }
         }
@@ -1051,10 +1066,10 @@ impl DAPSequences {
         let request = self.to_bytes();
         let result = dap.jtag_sequence(&request[..])?;
         let expected_n_bytes = self.capture_lengths.iter().map(|l| (l+7)/8).sum::<usize>();
+        let result_len = result.len();
         // Check for undersized data from probe.
-        if result.len() < expected_n_bytes {
-            log::error!("Expected at least {} bytes from probe, but only got {}",
-                        expected_n_bytes, result.len());
+        if result_len < expected_n_bytes {
+            log::error!("Expected at least {expected_n_bytes} bytes from probe, but only got {result_len}");
             Err(Error::UnexpectedJTAGLength)
         } else {
             // CMSIS-DAPv1 probes will always return a full HID report of 64 bytes,
@@ -1124,7 +1139,7 @@ impl<'a> Sequences<'a> {
         // Check correct length of data is provided.
         if let Some(tdi) = tdi {
             if tdi.len() != len {
-                log::error!("{} bits of TDI data supplied, expected {}", tdi.len(), len);
+                log::error!("{} bits of TDI data supplied, expected {len}", tdi.len());
                 return Err(Error::InvalidSequence);
             }
         }

@@ -79,7 +79,7 @@ impl Probe {
 
     /// Attempt to open a v2 probe from a specified Device.
     fn from_device(device: Device<Context>) -> Result<Probe> {
-        log::trace!("Attempting to open in CMSIS-DAPv2 mode: {:?}", device);
+        log::trace!("Attempting to open in CMSIS-DAPv2 mode: {device:?}");
         let timeout = Duration::from_millis(100);
         let mut handle = device.open()?;
         let language = handle.read_languages(timeout)?.get(0).cloned().unwrap();
@@ -116,7 +116,7 @@ impl Probe {
                 // Attempt to claim interface.
                 match handle.claim_interface(interface.number()) {
                     Ok(()) => {
-                        log::debug!("Successfully opened v2 probe: {:?}", device);
+                        log::debug!("Successfully opened v2 probe: {device:?}");
                         let out_ep = eps[0].address();
                         let in_ep = eps[1].address();
                         let max_packet_size = eps[1].max_packet_size() as usize;
@@ -131,7 +131,7 @@ impl Probe {
 
     /// Attempt to open a v1 probe from a specified vid/pid and optional sn.
     fn from_hid(info: &ProbeInfo) -> Result<Probe> {
-        log::trace!("Attempting to open in CMSIS-DAPv1 mode: {}", info);
+        log::trace!("Attempting to open in CMSIS-DAPv1 mode: {info}");
         let hid_device = match info.sn.clone() {
             Some(sn) => HidApi::new().and_then(|api| api.open_serial(info.vid, info.pid, &sn)),
             None     => HidApi::new().and_then(|api| api.open(info.vid, info.pid)),
@@ -139,7 +139,7 @@ impl Probe {
         match hid_device {
             Ok(device) => match device.get_product_string() {
                 Ok(Some(s)) if s.contains("CMSIS-DAP") => {
-                    log::debug!("Successfully opened v1 probe: {:?}", info);
+                    log::debug!("Successfully opened v1 probe: {info:?}");
                     // Start with a default of 64 byte packet size, which is
                     // the most common report size for CMSIS-DAPv1 HID devices.
                     Ok(Probe::V1 { device, report_size: 64 })
@@ -196,13 +196,13 @@ impl Probe {
             },
         };
         buf.truncate(n);
-        log::trace!("RX: {:02X?}", buf);
+        log::trace!("RX: {buf:02X?}");
         Ok(buf)
     }
 
     /// Write `buf` to CMSIS-DAP probe, waiting up to 10ms.
     pub fn write(&self, buf: &[u8]) -> Result<usize> {
-        log::trace!("TX: {:02X?}", buf);
+        log::trace!("TX: {buf:02X?}");
         match self {
             Self::V1 { device, report_size, .. } => {
                 let mut buf = buf.to_vec();
@@ -251,12 +251,12 @@ impl ProbeInfo {
 
         if let Ok(api) = HidApi::new() {
             for device in api.device_list() {
-                if let Some(info) = Self::from_hid(&device) {
+                if let Some(info) = Self::from_hid(device) {
                     if !probes.iter().any(|p| info.matches(p)) {
-                        log::trace!("Adding new HID-only probe {}", info);
+                        log::trace!("Adding new HID-only probe {info}");
                         probes.push(info)
                     } else {
-                        log::trace!("Ignoring duplicate {}", info);
+                        log::trace!("Ignoring duplicate {info}");
                     }
                 }
             }
@@ -284,7 +284,7 @@ impl ProbeInfo {
 
     /// Attempt to open a Probe corresponding to this ProbeInfo.
     pub fn open(&self) -> Result<Probe> {
-        log::trace!("Opening probe: {}", self);
+        log::trace!("Opening probe: {self}");
 
         // Only attempt to open as a v2 device if v1_only is not true.
         if !self.v1_only {
@@ -370,7 +370,7 @@ impl ProbeInfo {
     /// Returns None if the device could not be read or was not a CMSIS-DAP device.
     fn from_hid(device: &DeviceInfo) -> Option<ProbeInfo> {
         let prod_str = device.product_string()?;
-        let path = device.path().to_str().unwrap_or(&"");
+        let path = device.path().to_str().unwrap_or("");
         if prod_str.contains("CMSIS-DAP") || path.contains("CMSIS-DAP") {
             Some(Self {
                 name: Some(prod_str.to_owned()),
