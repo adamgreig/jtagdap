@@ -82,7 +82,7 @@ impl DAP {
         match response.get(1) {
             Some(2) => {
                 let size = u16::from_le_bytes([response[2], response[3]]);
-                log::trace!("Got packet size {} bytes", size);
+                log::trace!("Got packet size {size} bytes");
                 Ok(size as usize)
             },
             _ => Err(Error::InvalidResponse),
@@ -112,7 +112,7 @@ impl DAP {
     }
 
     pub fn set_led(&self, state: bool) -> Result<()> {
-        log::trace!("Setting probe LED to {}", state);
+        log::trace!("Setting probe LED to {state}");
         let request = Request {
             command: Command::DAP_HostStatus,
             data: vec![HostStatusType::Connect.into(), state as u8]
@@ -122,7 +122,7 @@ impl DAP {
     }
 
     pub fn set_nrst(&self, state: bool) -> Result<()> {
-        log::trace!("Setting NRST to {}", state);
+        log::trace!("Setting NRST to {state}");
         let state = (state as u8) << 7;
         let select = 1 << 7;
         let request = Request { command: Command::DAP_SWJ_Pins,
@@ -140,7 +140,7 @@ impl DAP {
     }
 
     pub fn set_clock(&self, freq: u32) -> Result<()> {
-        log::debug!("Setting clock to {}Hz", freq);
+        log::debug!("Setting clock to {freq}Hz");
         let request = Request {
             command: Command::DAP_SWJ_Clock, data: freq.to_le_bytes().to_vec()
         };
@@ -153,9 +153,12 @@ impl DAP {
 
     pub fn jtag_sequence(&self, data: &[u8]) -> Result<Vec<u8>> {
         log::trace!("Running JTAG sequence");
-        if data.len() > self.packet_size - 1 {
-            log::error!("Attempted JTAG sequence of length {} which exceeds packet size {}",
-                        data.len(), self.packet_size);
+
+        let data_len = data.len();
+        let packet_size = self.packet_size;
+
+        if data_len > self.packet_size - 1 {
+            log::error!("Attempted JTAG sequence of length {data_len} which exceeds packet size {packet_size}");
             return Err(Error::JTAGTooLong);
         }
         let request = Request { command: Command::DAP_JTAG_Sequence, data: data.to_vec() };
@@ -170,7 +173,7 @@ impl DAP {
         let request_command = request.command.into();
         self.probe.write(&request.to_bytes())?;
         let response = self.probe.read()?;
-        match response.get(0) {
+        match response.first() {
             Some(command) if *command == request_command => Ok(response),
             _ => Err(Error::InvalidResponse),
         }
@@ -220,12 +223,14 @@ enum HostStatusType {
 }
 
 #[derive(Copy, Clone, IntoPrimitive)]
+#[allow(clippy::upper_case_acronyms)]
 #[repr(u8)]
 enum ConnectPort {
     JTAG                = 2,
 }
 
 #[derive(Copy, Clone, IntoPrimitive)]
+#[allow(clippy::upper_case_acronyms)]
 #[repr(u8)]
 enum ConnectPortResponse {
     JTAG                = 2,

@@ -2,14 +2,14 @@
 name = "jtagdap"
 version = "0.1.1"
 authors = ["Adam Greig <adam@adamgreig.com>"]
-edition = "2018"
+edition = "2021"
 repository = "https://github.com/adamgreig/jtagdap"
 license = "Apache-2.0 OR MIT"
 description = "Provides JTAG access to CMSIS-DAP compatible probes"
 
 [dependencies]
-rusb = "0.6.5"
-hidapi = "1.2.3"
+rusb = "0.9"
+hidapi = "1.4"
 log = "0.4.11"
 thiserror = "1.0.22"
 num_enum = "0.5.1"
