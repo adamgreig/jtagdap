@@ -311,24 +311,24 @@ impl ProbeInfo {
     /// Returns None if the device could not be read or was not a CMSIS-DAP device.
     fn from_device(device: &Device<Context>) -> Option<ProbeInfo> {
         let timeout = Duration::from_millis(100);
-        log::trace!("Scanning device: {:?}", device);
+        log::trace!("Scanning device: {device:?}");
         let desc = match device.device_descriptor() {
             Err(error) => {
-                log::trace!("Could not get descriptor: {}", error);
+                log::trace!("Could not get descriptor: {error}");
                 return None;
             },
             Ok(desc) => desc,
         };
         let handle = match device.open() {
             Err(error) => {
-                log::trace!("Could not get a device handle: {}", error);
+                log::trace!("Could not get a device handle: {error}");
                 return None;
             },
             Ok(handle) => handle,
         };
         let language = match handle.read_languages(timeout) {
             Err(error) => {
-                log::trace!("Could not get the device languages: {}", error);
+                log::trace!("Could not get the device languages: {error}");
                 return None;
             },
             Ok(languages) => languages,
