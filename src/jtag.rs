@@ -105,7 +105,7 @@ impl JTAG {
 
     /// Create a new JTAG TAP, allowing read/write access to a single TAP
     /// on the chain.
-    pub fn into_tap(self, chain: JTAGChain, index: usize) -> Result<JTAGTAP> {
+    pub fn tap(&mut self, chain: &JTAGChain, index: usize) -> Result<JTAGTAP> {
         if index < chain.n_taps() {
             Ok(JTAGTAP::new(self, chain, index))
         } else {
@@ -611,9 +611,9 @@ impl JTAGChain {
 /// Represents a single TAP in a JTAG scan chain,
 /// with methods to read and write this TAP while
 /// other TAPs are placed into BYPASS.
-pub struct JTAGTAP {
-    jtag: JTAG,
-    chain: JTAGChain,
+pub struct JTAGTAP<'a> {
+    jtag: &'a mut JTAG,
+    n_taps: usize,
     index: usize,
     ir_len: usize,
     ir_prefix: usize,
@@ -622,10 +622,10 @@ pub struct JTAGTAP {
     dr_suffix: usize,
 }
 
-impl JTAGTAP {
+impl<'a> JTAGTAP<'a> {
     /// Create a new JTAGTAP from the provided chain and index.
     /// The index must be within the number of taps in the chain.
-    pub(crate) fn new(jtag: JTAG, chain: JTAGChain, index: usize) -> Self {
+    pub(crate) fn new(jtag: &'a mut JTAG, chain: &JTAGChain, index: usize) -> Self {
         let irl = chain.irlens();
         assert!(index < irl.len(), "index not contained in chain");
         let ir_len = irl[index];
@@ -633,7 +633,8 @@ impl JTAGTAP {
         let ir_suffix = irl[index + 1..].iter().sum();
         let dr_prefix = index;
         let dr_suffix = irl.len() - index - 1;
-        JTAGTAP { jtag, chain, index, ir_len, ir_prefix, ir_suffix, dr_prefix, dr_suffix }
+        let n_taps = chain.n_taps();
+        JTAGTAP { jtag, n_taps, index, ir_len, ir_prefix, ir_suffix, dr_prefix, dr_suffix }
     }
 
     /// Returns the index of this TAP.
@@ -643,17 +644,12 @@ impl JTAGTAP {
 
     /// Returns number of TAPs in the underlying chain.
     pub fn n_taps(&self) -> usize {
-        self.chain.n_taps()
+        self.n_taps
     }
 
     /// Returns maximum number of TDI bits that can fit into a single DAP packet.
     pub fn max_tdi_bits(&self) -> usize {
         self.jtag.max_tdi_bits()
-    }
-
-    /// Consume the JTAGTAP and return its JTAG and JTAGChain.
-    pub fn release(self) -> (JTAG, JTAGChain) {
-        (self.jtag, self.chain)
     }
 
     /// Reset JTAG TAPs, entering Test-Logic-Reset.
